@@ -90,7 +90,6 @@ def problem_2_a(df: DataFrame):
 
     # Ensure numerical columns are of correct data type
     for var in numerical_vars:
-        df[var] = df[var].fillna(0)
         df[var] = df[var].astype(int)
 
     for var in numerical_vars:
