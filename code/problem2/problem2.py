@@ -24,7 +24,7 @@ OUTPUT_DIR = "../../output/problem2"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-def load_problem1_json_to_dataframe(input_file) -> dict:
+def load_problem1_json_to_dataframe(input_file) -> DataFrame:
     """
     Loads the JSON data from the input file
     @param input_file: The path to the input file
