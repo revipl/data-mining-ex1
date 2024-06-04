@@ -181,7 +181,10 @@ def extract_project_data(index_id: int, URL: str) -> dict:
         "FlexibleGoal": flexible_goal
     }
     driver.quit()
-    print(DIVIDER)
+
+    if DEBUG:
+        print(DIVIDER)
+
     return record
 
 
@@ -206,7 +209,16 @@ def extract_projects_data_to_json(records: list) -> None:
     print(f"Scraping complete. Data saved to {output_file}")
 
 
-def workertest(records_queue, project_urls_queue):
+def extract_data_worker(records_queue, project_urls_queue):
+    """
+    acts as a worker process for multiprocessing. It continuously
+    retrieves tasks from the project_urls_queue, extracts project data using
+    the extract_project_data function, and puts the extracted record into the
+    records_queue. It stops when it encounters a sentinel value (None,
+    None) in the project_urls_queue.
+    :param records_queue: A queue to store extracted records.
+    :param project_urls_queue: A queue to store tasks (index, url).
+    """
     while True:
         try:
             index, url = project_urls_queue.get()
@@ -219,18 +231,29 @@ def workertest(records_queue, project_urls_queue):
 
 
 def main(crawler=True, browsers=5):
-    records = []
-    project_id = 0
+    """
+    Main function to control the scraping process.
+    :param crawler: Flag to indicate whether to run the crawler or not.
+    Default is True.
+    :param browsers: Number of browsers to use for multiprocessing. Default
+    is 5.
+    :return:
+    """
+    # records = []
+    # project_id = 0
 
     # fixed goal project:
-    # https://www.indiegogo.com/projects/racebox-micro-diy-gps-data-for-the-driven--2
+    # https://www.indiegogo.com/projects/racebox-micro-diy-gps-data-for-the
+    # -driven--2
 
     # flexible goal project:
-    # https://www.indiegogo.com/projects/neo-ps1-ultra-short-throw-smart-projector
+    # https://www.indiegogo.com/projects/neo-ps1-ultra-short-throw-smart
+    # -projector
 
     # test single project:
     # extract_project_data(0,
-    #                      "https://www.indiegogo.com/projects/racebox-micro-diy-gps-data-for-the-driven--2", records)
+    #                      "https://www.indiegogo.com/projects/racebox-micro
+    #                      -diy-gps-data-for-the-driven--2", records)
 
     if crawler:
         indiegogo_crawler(URL)
@@ -252,8 +275,9 @@ def main(crawler=True, browsers=5):
         project_urls_queue.put((index + 1, url))
 
     # create and start worker processes
-    workers = [mp.Process(target=workertest, args=(records_queue,
-                                               project_urls_queue)) for _ in
+    workers = [mp.Process(target=extract_data_worker, args=(records_queue,
+                                                            project_urls_queue))
+               for _ in
                range(browsers)]
     for worker in workers:
         worker.start()
