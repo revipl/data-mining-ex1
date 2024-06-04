@@ -1,10 +1,13 @@
+import gc
 import os
 import json
 import time
-import multiprocessing as mp
+import threading
 from selenium.webdriver import Edge
 from selenium.webdriver.common.by import By
 from selenium.webdriver.edge.options import Options
+from multiprocessing.pool import ThreadPool
+
 
 # General Settings
 OUTPUT_DIR = "../../output/problem1"
@@ -21,12 +24,34 @@ XPATH_INDIEGOGO_FOOTER = '//div[@class="brandRefreshFooterDesktop"]'
 XPATH_INDIEGOGO_PROJECT_URL = ('//div[@class="projectDiscoverableCard '
                                'discoverableCard"]/a')
 
-# Driver Settings
-edge_options = Options()
-edge_options.add_argument("--headless")  # GUI is off
-edge_options.add_argument("--no-sandbox")
-edge_options.add_argument("--start-maximized")
-edge_options.add_argument("--disable-dev-shm-usage")
+threadLocal = threading.local()
+
+
+class Driver:
+    """
+    A class used to manage the Selenium WebDriver
+    """
+    def __init__(self):
+        edge_options = Options()
+        edge_options.add_argument("--headless")  # GUI is off
+        edge_options.add_argument("--no-sandbox")
+        edge_options.add_argument("--start-maximized")
+        edge_options.add_argument("--disable-dev-shm-usage")
+        self.driver = Edge(options=edge_options)
+
+    def __del__(self):
+        self.driver.quit()  # clean up driver when we are cleaned up
+        print('The driver has been closed.')
+
+    @classmethod
+    def create_driver(cls):
+        the_driver = getattr(threadLocal, 'the_driver', None)
+        if the_driver is None:
+            print('Creating new driver.')
+            the_driver = cls()
+            threadLocal.the_driver = the_driver
+        driver = the_driver.driver
+        return driver
 
 
 def indiegogo_crawler(URL: str) -> None:
@@ -38,7 +63,7 @@ def indiegogo_crawler(URL: str) -> None:
     :param URL: the projects' URL in Indiegogo
     """
     print(f"Gathering projects URLs:")
-    driver = Edge(options=edge_options)
+    driver = Driver.create_driver()
     driver.get(URL)
     # time.sleep(PAUSE_TIME)  # Wait for the page to load
 
@@ -73,12 +98,10 @@ def extract_project_data(index_id: int, URL: str) -> dict:
     :param URL: The URL of the Indiegogo project.
     :param records: A list to store the extracted project data.
     """
+    driver = Driver.create_driver()
+    print(f"Started Project ID: {index_id}\n")
 
-    print(f"Project: {index_id}/{NUM_OF_PROJECTS}")
-
-    driver = Edge(options=edge_options)
     driver.get(URL)
-    # time.sleep(PAUSE_TIME)  # Wait for the page to load
 
     try:
         creators = driver.find_element(By.CLASS_NAME,
@@ -118,7 +141,7 @@ def extract_project_data(index_id: int, URL: str) -> dict:
         dollars_pledged = int(''.join(c for c in dollars_pledged if
                                       c.isdigit()))
     except:
-        dollars_pledged = 'Unknown'
+        dollars_pledged = -1
     if DEBUG:
         print(f"dollars_pledged: {dollars_pledged}")
 
@@ -130,7 +153,7 @@ def extract_project_data(index_id: int, URL: str) -> dict:
         dollars_goal = dollars_goal[dollars_goal.find("of "):]
         dollars_goal = int(''.join(c for c in dollars_goal if c.isdigit()))
     except:
-        dollars_goal = 'Unknown'
+        dollars_goal = -1
     if DEBUG:
         print(f"dollars_goal: {dollars_goal}")
 
@@ -141,7 +164,7 @@ def extract_project_data(index_id: int, URL: str) -> dict:
         num_backers = ' '.join(num_backers.split())
         num_backers = int(''.join(c for c in num_backers if c.isdigit()))
     except:
-        num_backers = 'Unknown'
+        num_backers = -1
     if DEBUG:
         print(f"dollars_goal: {num_backers}")
 
@@ -152,7 +175,7 @@ def extract_project_data(index_id: int, URL: str) -> dict:
         days_to_go = ' '.join(days_to_go.split())
         days_to_go = int(''.join(c for c in days_to_go if c.isdigit()))
     except:
-        days_to_go = 'Unknown'
+        days_to_go = -1
     if DEBUG:
         print(f"dollars_goal: {days_to_go}")
 
@@ -180,7 +203,6 @@ def extract_project_data(index_id: int, URL: str) -> dict:
         "DaysToGo": days_to_go,
         "FlexibleGoal": flexible_goal
     }
-    driver.quit()
 
     if DEBUG:
         print(DIVIDER)
@@ -209,28 +231,7 @@ def extract_projects_data_to_json(records: list) -> None:
     print(f"Scraping complete. Data saved to {output_file}")
 
 
-def extract_data_worker(records_queue, project_urls_queue):
-    """
-    acts as a worker process for multiprocessing. It continuously
-    retrieves tasks from the project_urls_queue, extracts project data using
-    the extract_project_data function, and puts the extracted record into the
-    records_queue. It stops when it encounters a sentinel value (None,
-    None) in the project_urls_queue.
-    :param records_queue: A queue to store extracted records.
-    :param project_urls_queue: A queue to store tasks (index, url).
-    """
-    while True:
-        try:
-            index, url = project_urls_queue.get()
-            if index is None:  # Sentinel value to signal termination
-                break
-            record = extract_project_data(index, url)
-            records_queue.put(record)
-        except Exception as e:
-            print(f"Error in worker process: {e}")
-
-
-def main(crawler=True, browsers=5):
+def main(crawler=True):
     """
     Main function to control the scraping process.
     :param crawler: Flag to indicate whether to run the crawler or not.
@@ -239,8 +240,7 @@ def main(crawler=True, browsers=5):
     is 5.
     :return:
     """
-    # records = []
-    # project_id = 0
+    records = []
 
     # fixed goal project:
     # https://www.indiegogo.com/projects/racebox-micro-diy-gps-data-for-the
@@ -258,46 +258,27 @@ def main(crawler=True, browsers=5):
     if crawler:
         indiegogo_crawler(URL)
 
-    f = open(PROJECT_URLS_FILE_NAME, "r")
-    project_urls = f.read().splitlines()
-    f.close()
-
     # single thread
     # for index, url in enumerate(project_urls):
     #     records.append(extract_project_data(index+1, url))
 
-    # multiprocessing
-    records_queue = mp.Queue()  # Queue to store extracted records
-    project_urls_queue = mp.Queue()  # Queue to store tasks (index, url)
+    # read urls
+    with open(PROJECT_URLS_FILE_NAME, 'r') as infile:
+        urls = infile.read().splitlines()
+    infile.close()
 
-    # enqueue project URLs (replace with your actual URLs)
-    for index, url in enumerate(project_urls):
-        project_urls_queue.put((index + 1, url))
+    # extract data using threading
+    number_of_processes = min(4, len(urls))
+    with ThreadPool(processes=number_of_processes) as pool:
+        records = pool.starmap(extract_project_data, enumerate(urls))
+        # should ensure that the __del__ method is run on  class Driver
+        gc.collect()
 
-    # create and start worker processes
-    workers = [mp.Process(target=extract_data_worker, args=(records_queue,
-                                                            project_urls_queue))
-               for _ in
-               range(browsers)]
-    for worker in workers:
-        worker.start()
-
-    # put sentinel values to signal end of tasks (one for each worker)
-    for _ in range(browsers):
-        project_urls_queue.put((None, None))
-
-    # collect extracted records from the queue
-    records = []
-    while not records_queue.empty():
-        record = records_queue.get()
-        records.append(record)
-
-    # wait for worker processes to finish
-    for worker in workers:
-        worker.join()
+        pool.close()
+        pool.join()
 
     extract_projects_data_to_json(records)
 
 
 if __name__ == "__main__":
-    main(crawler=False)
+    main(crawler=True)

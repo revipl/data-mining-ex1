@@ -19,7 +19,7 @@ import seaborn as sns
 
 DEBUG = False
 DIVIDER = '*' * 100
-INPUT_FILE = "../../output/problem1/dummy.json"  # dummy.json / data.json
+INPUT_FILE = "../../output/problem1/data.json"  # dummy.json / data.json
 OUTPUT_DIR = "../../output/problem2"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
