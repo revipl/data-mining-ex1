@@ -1,3 +1,17 @@
+"""
+In this problem, you will use crawling to create a (tiny) dataset.
+For the sake of this homework, we only need 300 pages, but your code should
+be able to crawl the entire site, if we remove that restriction.
+
+Dynamic content: Indiegogo,
+Home category:
+https://www.indiegogo.com/explore/home?project=all&project=all&sort=trending
+
+Fields:
+Creators, Title, Text , DollarsPledged, DollarsGoal, NumBackers, DaysToGo
+(or InDemand), FlexibleGoal.
+"""
+
 import gc
 import os
 import json
@@ -8,15 +22,14 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.edge.options import Options
 from multiprocessing.pool import ThreadPool
 
-
 # General Settings
+DEBUG = False
 OUTPUT_DIR = "../../output/problem1"
 PROJECT_URLS_FILE_NAME = "project_urls.txt"
 URL = ('https://www.indiegogo.com/explore/home?project_timing=all'
        '&product_stagall&sort=trending')
 PAUSE_TIME = 2  # in seconds
 NUM_OF_PROJECTS = 300
-DEBUG = False
 DIVIDER = '*' * 100
 
 # Indiegogo scraping XPATHs (crawler)
@@ -31,6 +44,7 @@ class Driver:
     """
     A class used to manage the Selenium WebDriver
     """
+
     def __init__(self):
         edge_options = Options()
         edge_options.add_argument("--headless")  # GUI is off
@@ -47,7 +61,7 @@ class Driver:
     def create_driver(cls):
         the_driver = getattr(threadLocal, 'the_driver', None)
         if the_driver is None:
-            print('Creating new driver.')
+            print('Creating a new driver.')
             the_driver = cls()
             threadLocal.the_driver = the_driver
         driver = the_driver.driver
@@ -175,7 +189,7 @@ def extract_project_data(index_id: int, URL: str) -> dict:
         days_to_go = ' '.join(days_to_go.split())
         days_to_go = int(''.join(c for c in days_to_go if c.isdigit()))
     except:
-        days_to_go = -1
+        days_to_go = -1  # in demand
     if DEBUG:
         print(f"dollars_goal: {days_to_go}")
 

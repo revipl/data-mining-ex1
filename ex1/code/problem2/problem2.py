@@ -68,10 +68,10 @@ def normalize_data(json_data) -> DataFrame:
                     'Creators': 'Unknown',
                     'Title': 'Unknown',
                     'Text': 'Unknown',
-                    'DollarsPledged': 0,
-                    'DollarsGoal': 0,
-                    'NumBackers': 0,
-                    'DaysToGo': 0,
+                    'DollarsPledged': -1,
+                    'DollarsGoal': -1,
+                    'NumBackers': -1,
+                    'DaysToGo': -1,
                     'FlexibleGoal': False})
 
     return df
